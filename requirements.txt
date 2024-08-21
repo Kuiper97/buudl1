@@ -1,0 +1,23 @@
+#pip install 
+
+# To ensure app dependencies are ported from your virtual environment/host machine into your container, run 'pip freeze > requirements.txt' in the terminal to overwrite this file
+pandas
+datetime
+matplotlib.pyplot
+numpy 
+tkinter
+tkinter.messagebox 
+tkinter.filedialog
+glob
+os 
+openpyxl
+torch
+torch.nn
+torch.optim
+statsmodels.tsa.arima_model
+sklearn.ensemble
+sklearn.metrics
+xlrd
+
+#for merge file pdf 
+PyPDF2
