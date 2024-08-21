@@ -70,6 +70,7 @@ def merge_pdfs(pdf_files, page_ranges):
     try:
         with open(output_file, 'wb') as pdf_output:
             pdf_writer.write(pdf_output)
+        os.startfile(output_file)
     except IOError as e:
         messagebox.showerror("Error", f"Error: {e}")
               
