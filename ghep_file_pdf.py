@@ -4,12 +4,17 @@ import PyPDF2
 import os
 
 
-def get_page_ranges(pdf_files, root):
+def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
     frame = tk.Frame(root)
     frame.pack(pady=10, anchor='w', fill='both', expand=True)
     entry_fields = []
-
+    
+    new_pdf_files = [file_listbox.get(i) for i in range(file_listbox.size())]
+    pdf_files = list(pdf_files)  # Convert tuple to list
+    pdf_files.clear()
+    pdf_files.extend(new_pdf_files)
+    
     for pdf_file in pdf_files:
         label = tk.Label(frame, text=f"Start page muốn ghép của {pdf_file}:", fg="green")
         label.pack(anchor='w', fill='x')
@@ -80,7 +85,71 @@ def select_pdf_files(root):
                                             filetypes=[("PDF files", "*.pdf")])
     if not pdf_files:  # Check if the user has selected any files
         return
-    get_page_ranges(pdf_files, root)
+    # Store the original order of selection
+    original_order = list(pdf_files)
+    
+    # Create a frame to hold the sort button and file list
+    frame = tk.Frame(root)
+    frame.pack(pady=10, anchor='w', fill='both', expand=True)
+
+    # Create a button to sort the files
+    sort_button = tk.Button(frame, text="Sort Files A-Z", command=lambda: sort_files(original_order, frame))
+    sort_button.pack(anchor='w', fill='x')
+
+    # Create a label to display the file list
+    file_list_label = tk.Label(frame, text="Selected Files:")
+    file_list_label.pack(anchor='w', fill='x')
+
+    # Create a listbox to display the file list
+    file_listbox = tk.Listbox(frame, width=80, height=5)  # Increase the width and height
+    file_listbox.pack(anchor='w', fill='both', expand=True)
+    for file in pdf_files:
+        file_listbox.insert(tk.END, file)
+
+    # Create a frame to hold the move up and move down buttons
+    button_frame = tk.Frame(frame)
+    button_frame.pack(anchor='w', fill='x')
+
+    # Create a button to move the selected file up
+    move_up_button = tk.Button(button_frame, text="Move Up", command=lambda: move_file_up(file_listbox))
+    move_up_button.pack(side=tk.LEFT)
+
+    # Create a button to move the selected file down
+    move_down_button = tk.Button(button_frame, text="Move Down", command=lambda: move_file_down(file_listbox))
+    move_down_button.pack(side=tk.LEFT)
+
+    # Create a button to proceed to page range selection
+    proceed_button = tk.Button(frame, text="Proceed to Page Range Selection", 
+                                command=lambda: get_page_ranges(file_listbox, pdf_files, root))
+    proceed_button.pack(anchor='c')
+
+def move_file_up(file_listbox):
+    """Move the selected file up in the list"""
+    index = file_listbox.curselection()
+    if index:
+        index = index[0]
+        if index > 0:  # Check if the item is not already at the top
+            selected_file = file_listbox.get(index)  # Store the selected file
+            file_listbox.delete(index)
+            file_listbox.insert(index - 1, selected_file)  # Insert the selected file at the new index
+
+def move_file_down(file_listbox):
+    """Move the selected file down in the list"""
+    index = file_listbox.curselection()
+    if index:
+        index = index[0]
+        if index < file_listbox.size() - 1:  # Check if the item is not already at the bottom
+            selected_file = file_listbox.get(index)  # Store the selected file
+            file_listbox.delete(index)
+            file_listbox.insert(index + 1, selected_file)  # Insert the selected file at the new index
+
+def sort_files(original_order, frame):
+    """Sort the files in alphabetical order"""
+    pdf_files = sorted(original_order)
+    file_listbox = frame.winfo_children()[2]  # Get the listbox widget
+    file_listbox.delete(0, tk.END)  # Clear the listbox
+    for file in pdf_files:
+        file_listbox.insert(tk.END, file)  # Update the listbox with the sorted files
 
 if __name__ == '__main__':
     root = tk.Tk()
@@ -89,19 +158,43 @@ if __name__ == '__main__':
     root.padding = 10
     root.geometry("1000x500")
 
+    # Create a canvas to hold the content
+    canvas = tk.Canvas(root)
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Create a scrollbar and associate it with the canvas
+    scrollbar = tk.Scrollbar(root, orient=tk.VERTICAL, command=canvas.yview)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    # Create a frame to hold the content
+    content_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=content_frame, anchor='nw')
+
     # Create a label to display the title
-    title_label = tk.Label(root, text="PDF Merger", font=("Arial", 20, "bold"), fg="red",
+    title_label = tk.Label(content_frame, text="PDF Merger", font=("Arial", 20, "bold"), fg="red",
                         highlightbackground="blue", highlightcolor="blue")
     title_label.pack(pady=10, anchor='c', fill='x')
 
     # Create a label to display the instructions
-    instructions_label = tk.Label(root, text="Select PDF files to merge and enter the page ranges.", fg="blue",
+    instructions_label = tk.Label(content_frame, text="Select PDF files to merge and enter the page ranges.", fg="blue",
                                 highlightbackground="blue", highlightcolor="blue")
     instructions_label.pack(pady=10, anchor='c', fill='x')
 
     # Create a button to start the merge process
-    button = tk.Button(root, text="Select PDF Files", 
+    button = tk.Button(content_frame, text="Select PDF Files", 
                         command=lambda: select_pdf_files(root))
     button.pack(pady=10, anchor='c')
+
+    # Update the scroll region
+    content_frame.update_idletasks()
+    canvas.configure(scrollregion=canvas.bbox("all"))
+
+    # Add this line to update the scroll region after adding widgets
+    canvas.update_idletasks()
+    canvas.configure(scrollregion=canvas.bbox("all"))
+
+    # Add this line to configure the canvas to expand
+    canvas.pack(fill='both', expand=True)
 
     root.mainloop()
