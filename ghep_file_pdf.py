@@ -156,7 +156,7 @@ if __name__ == '__main__':
     root.title("PDF Merger")
     root.iconbitmap("pdf_filetypes_21618.ico")
     root.padding = 10
-    root.geometry("1000x500")
+    root.geometry("1200x500")
 
     # Create a canvas to hold the content
     canvas = tk.Canvas(root)
