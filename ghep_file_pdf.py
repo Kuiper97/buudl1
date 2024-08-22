@@ -8,30 +8,47 @@ def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
     frame = tk.Frame(root)
     frame.pack(pady=10, anchor='w', fill='both', expand=True)
+
+    # Create a canvas to hold the content
+    canvas = tk.Canvas(frame, width=400, height=300)
+    canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+
+    # Create a scrollbar and associate it with the canvas
+    scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+    canvas.configure(yscrollcommand=scrollbar.set)
+
+    # Create a frame to hold the content
+    content_frame = tk.Frame(canvas)
+    canvas.create_window((0, 0), window=content_frame, anchor='nw')
+
     entry_fields = []
-    
     new_pdf_files = [file_listbox.get(i) for i in range(file_listbox.size())]
     pdf_files = list(pdf_files)  # Convert tuple to list
     pdf_files.clear()
     pdf_files.extend(new_pdf_files)
-    
+
     for pdf_file in pdf_files:
-        label = tk.Label(frame, text=f"Start page muốn ghép của {pdf_file}:", fg="green")
+        label = tk.Label(content_frame, text=f"Start page muốn ghép của {pdf_file}:", fg="green")
         label.pack(anchor='w', fill='x')
-        entry = tk.Entry(frame)
+        entry = tk.Entry(content_frame)
         entry.insert(0, "1")  # Set default value to 1
         entry.pack(anchor='w', fill='x')
         entry_fields.append(entry)
 
-        label = tk.Label(frame, text=f"End page muốn ghép của {pdf_file}:", fg="blue")
+        label = tk.Label(content_frame, text=f"End page muốn ghép của {pdf_file}:", fg="blue")
         label.pack(anchor='w', fill='x')
-        entry = tk.Entry(frame)
+        entry = tk.Entry(content_frame)
         entry.insert(0, str(len(PyPDF2.PdfReader(pdf_file).pages)))  # Set default value to total number of pages
         entry.pack(anchor='w', fill='x')
         entry_fields.append(entry)
 
-    button = tk.Button(frame, text="Submit", command=lambda: submit_page_ranges(entry_fields, pdf_files))
+    button = tk.Button(content_frame, text="Submit", command=lambda: submit_page_ranges(entry_fields, pdf_files))
     button.pack(anchor='c')
+
+    # Update the scroll region
+    content_frame.update_idletasks()
+    canvas.configure(scrollregion=canvas.bbox("all"))
 
 def submit_page_ranges(entry_fields, pdf_files):
     """Submit page ranges and merge PDFs"""
@@ -100,9 +117,18 @@ def select_pdf_files(root):
     file_list_label = tk.Label(frame, text="Selected Files:")
     file_list_label.pack(anchor='w', fill='x')
 
+    # Create a frame to hold the file list and scrollbar
+    file_list_frame = tk.Frame(frame)
+    file_list_frame.pack(anchor='w', fill='both', expand=True)
+
+    # Create a scrollbar for the file list
+    scrollbar = tk.Scrollbar(file_list_frame)
+    scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
     # Create a listbox to display the file list
-    file_listbox = tk.Listbox(frame, width=80, height=5)  # Increase the width and height
-    file_listbox.pack(anchor='w', fill='both', expand=True)
+    file_listbox = tk.Listbox(file_list_frame, width=160, height=5, yscrollcommand=scrollbar.set)
+    file_listbox.pack(side=tk.LEFT, fill='both', expand=True)
+    scrollbar.config(command=file_listbox.yview)
     for file in pdf_files:
         file_listbox.insert(tk.END, file)
 
