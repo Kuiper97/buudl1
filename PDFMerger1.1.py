@@ -196,8 +196,8 @@ if __name__ == '__main__':
     photo = ImageTk.PhotoImage(image)
     background_label = tk.Label(root, image=photo)
     background_label.image = photo  # Keep a reference to the image
-    background_label.pack(fill='both', expand=True)  # Use pack and set fill and expand to True
-
+    #background_label.pack(fill='both', expand=True)  # Use pack and set fill and expand to True
+    background_label.place(relwidth=1, relheight=1)
     # Create a canvas to hold the content
     canvas = tk.Canvas(root)
     canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
