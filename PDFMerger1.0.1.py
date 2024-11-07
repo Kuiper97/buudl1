@@ -2,23 +2,23 @@ import tkinter as tk
 from tkinter import filedialog,messagebox
 import PyPDF2
 import os
-from PIL import Image, ImageTk
+
 
 def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
     frame = tk.Frame(root)
     frame.pack(pady=10, anchor='w', fill='both', expand=True)
 
-    # Cố định phần bên trái trong suốt quá trình sử dụng rộng 400, cao 300, cho phép expand
+    # Create a canvas to hold the content
     canvas = tk.Canvas(frame, width=400, height=300)
     canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
-    # Tạo phần thanh trượt cho phần được cố định bởi canvas phía trên theo trục đứng
+    # Create a scrollbar and associate it with the canvas
     scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     canvas.configure(yscrollcommand=scrollbar.set)
 
-    # Tạo khung để giữ phần nội dung cho việc chọn input để ghép file pdf
+    # Create a frame to hold the content
     content_frame = tk.Frame(canvas)
     canvas.create_window((0, 0), window=content_frame, anchor='nw')
 
@@ -191,13 +191,6 @@ if __name__ == '__main__':
     root.padding = 10
     root.geometry("1200x500")
 
-    # Add a background image
-    image = Image.open("background.png")
-    photo = ImageTk.PhotoImage(image)
-    background_label = tk.Label(root, image=photo)
-    background_label.image = photo  # Keep a reference to the image
-    #background_label.pack(fill='both', expand=True)  # Use pack and set fill and expand to True
-    background_label.place(relwidth=1, relheight=1)
     # Create a canvas to hold the content
     canvas = tk.Canvas(root)
     canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -212,8 +205,8 @@ if __name__ == '__main__':
     canvas.create_window((0, 0), window=content_frame2, anchor='nw')
 
     # Create a label to display the title
-    title_label = tk.Label(content_frame2, text="PDF Merger", font=("Arial", 20, "bold"), fg="white", bg="#007bff",
-                        highlightbackground="#007bff", highlightcolor="#007bff")
+    title_label = tk.Label(content_frame2, text="PDF Merger", font=("Arial", 20, "bold"), fg="red",
+                        highlightbackground="blue", highlightcolor="blue")
     title_label.pack(pady=10, anchor='c', fill='x')
 
     # Create a label to display the instructions
