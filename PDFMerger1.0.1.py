@@ -2,7 +2,7 @@ import tkinter as tk
 from tkinter import filedialog,messagebox
 import PyPDF2
 import os
-
+import tempfile
 
 def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
@@ -55,7 +55,7 @@ def submit_page_ranges(entry_fields, pdf_files):
     page_ranges = []
     for i in range(0, len(entry_fields), 2):
         start_page_entry = entry_fields[i]
-        end_page_entry = entry_fields[i+1]
+        end_page_entry = entry_fields[i + 1]
         try:
             start_page = int(start_page_entry.get())
             end_page = int(end_page_entry.get())
@@ -66,13 +66,19 @@ def submit_page_ranges(entry_fields, pdf_files):
             return
         page_ranges.append((start_page, end_page))
 
-    merge_pdfs(pdf_files, page_ranges)
+    temp_file_path = merge_pdfs(pdf_files, page_ranges)
+
+    # Create a button for previewing the merged PDF
+    if temp_file_path:  # Only create the button if the merge was successful
+        preview_button = tk.Button(content_frame2, text="Preview Merged PDF",
+                                    command=lambda: preview_pdf(temp_file_path))
+        preview_button.pack(anchor='c')
 
 def merge_pdfs(pdf_files, page_ranges):
     """Merge PDFs"""
     output_file = filedialog.asksaveasfilename(defaultextension='.pdf')
     if not output_file:
-        return
+        return None  # Return None if the user cancels
 
     pdf_writer = PyPDF2.PdfWriter()
 
@@ -84,17 +90,22 @@ def merge_pdfs(pdf_files, page_ranges):
                     pdf_writer.add_page(pdf_reader.pages[page])
                 else:
                     messagebox.showerror("Error", f"Page {page + 1} does not exist in {pdf_file}")
-                    return
+                    return None  # Return None if there's an error
         except PyPDF2.PdfReader.PdfReadError as e:
             messagebox.showerror("Error", f"Error reading PDF file: {e}")
-            return
+            return None  # Return None if there's an error
 
-    try:
-        with open(output_file, 'wb') as pdf_output:
-            pdf_writer.write(pdf_output)
-        os.startfile(output_file)
-    except IOError as e:
-        messagebox.showerror("Error", f"Error: {e}")
+    # Create a temporary file to store the merged PDF
+    with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as temp_file:
+        temp_file_path = temp_file.name
+        pdf_writer.write(temp_file)
+
+    return temp_file_path  # Return the path of the temporary file
+
+def preview_pdf(temp_file_path):
+    """Preview the merged PDF"""
+    if temp_file_path:  # Check if the path is valid
+        os.startfile(temp_file_path)  # Open the temporary file for preview
               
 def select_pdf_files(root):
     """Select PDF files to merge"""
@@ -102,6 +113,7 @@ def select_pdf_files(root):
                                             filetypes=[("PDF files", "*.pdf")])
     if not pdf_files:  # Check if the user has selected any files
         return
+
     # Store the original order of selection
     original_order = list(pdf_files)
     
@@ -148,7 +160,7 @@ def select_pdf_files(root):
     proceed_button = tk.Button(frame, text="Proceed to Page Range Selection", 
                                 command=lambda: get_page_ranges(file_listbox, pdf_files, root))
     proceed_button.pack(anchor='c')
-
+    
 def move_file_up(file_listbox):
     """Move the selected file up in the list"""
     index = file_listbox.curselection()
