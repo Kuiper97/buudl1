@@ -187,7 +187,7 @@ def reset_frames(root):
 if __name__ == '__main__':
     root = tk.Tk()
     root.title("PDF Merger")
-    root.iconbitmap("pdf_filetypes_21618.ico")
+    root.iconbitmap("CSO_logo_icon.ico")
     root.padding = 10
     root.geometry("1200x500")
 
