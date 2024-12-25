@@ -2,7 +2,13 @@ import tkinter as tk
 from tkinter import filedialog,messagebox
 import PyPDF2
 import os
-
+from PIL import Image, ImageTk
+import pikepdf
+import io
+import cv2
+import numpy as np
+from pdf2image import convert_from_path
+from tkinter import filedialog, messagebox
 
 def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
@@ -68,15 +74,101 @@ def submit_page_ranges(entry_fields, pdf_files):
 
     merge_pdfs(pdf_files, page_ranges)
 
+def preprocess_scanned_pdf(input_pdf_path, output_pdf_path, target_dpi=150):
+    """
+    Xử lý tối ưu PDF scan trước khi merge
+    Các bước xử lý:
+    1. Chuyển đổi PDF sang ảnh
+    2. Xử lý nâng cao chất lượng ảnh
+    3. Nén và giảm độ phân giải
+    4. Tạo PDF mới
+    """
+    try:
+        # Chuyển đổi PDF sang ảnh
+        images = convert_from_path(
+            input_pdf_path, 
+            dpi=target_dpi,
+            grayscale=True
+        )
+        
+        processed_images = []
+        
+        for img in images:
+            # Chuyển ảnh PIL sang numpy
+            np_image = np.array(img)
+            
+            # Các kỹ thuật xử lý ảnh scan
+            # 1. Khử nhiễu
+            denoised = cv2.fastNlMeansDenoising(np_image, None, 10, 7, 21)
+            
+            # 2. Điều chỉnh độ tương phản
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            contrast_enhanced = clahe.apply(denoised)
+            
+            # 3. Chỉnh sáng
+            brightness_adjusted = cv2.convertScaleAbs(contrast_enhanced, alpha=1.2, beta=10)
+            
+            # 4. Làm sắc nét
+            kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            sharpened = cv2.filter2D(brightness_adjusted, -1, kernel)
+            
+            # Chuyển lại sang ảnh PIL
+            pil_image = Image.fromarray(sharpened)
+            
+            # Nén ảnh
+            buffered = io.BytesIO()
+            pil_image.save(
+                buffered, 
+                format='JPEG', 
+                optimize=True, 
+                quality=60  # Điều chỉnh chất lượng nén
+            )
+            
+            processed_images.append(Image.open(buffered))
+        
+        # Lưu PDF
+        first_image = processed_images[0]
+        other_images = processed_images[1:]
+        
+        first_image.save(
+            output_pdf_path, 
+            "PDF", 
+            resolution=target_dpi, 
+            save_all=True, 
+            append_images=other_images
+        )
+        
+        return True
+    
+    except Exception as e:
+        messagebox.showerror("Lỗi", f"Không thể xử lý PDF scan: {str(e)}")
+        return False
+
 def merge_pdfs(pdf_files, page_ranges):
-    """Merge PDFs"""
+    """Merge PDFs and optimize scanned PDFs"""
+    # Danh sách PDF đã xử lý
+    processed_pdf_files = []
+    
+    # Xử lý từng file PDF scan trước khi merge
+    for pdf_file in pdf_files:
+        # Tạo file tạm để lưu PDF đã xử lý
+        processed_pdf_path = f"processed_{os.path.basename(pdf_file)}"
+        
+        # Xử lý PDF scan
+        if preprocess_scanned_pdf(pdf_file, processed_pdf_path):
+            processed_pdf_files.append(processed_pdf_path)
+        else:
+            # Nếu xử lý lỗi, sử dụng file gốc
+            processed_pdf_files.append(pdf_file)
+    
+    # Thực hiện merge như bình thường
     output_file = filedialog.asksaveasfilename(defaultextension='.pdf')
     if not output_file:
         return
 
     pdf_writer = PyPDF2.PdfWriter()
 
-    for pdf_file, (start_page, end_page) in zip(pdf_files, page_ranges):
+    for pdf_file, (start_page, end_page) in zip(processed_pdf_files, page_ranges):
         try:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
             for page in range(start_page - 1, end_page):
@@ -89,12 +181,17 @@ def merge_pdfs(pdf_files, page_ranges):
             messagebox.showerror("Error", f"Error reading PDF file: {e}")
             return
 
-    try:
-        with open(output_file, 'wb') as pdf_output:
-            pdf_writer.write(pdf_output)
-        os.startfile(output_file)
-    except IOError as e:
-        messagebox.showerror("Error", f"Error: {e}")
+    # Lưu file merge
+    with open(output_file, 'wb') as pdf_output:
+        pdf_writer.write(pdf_output)
+
+    # Xóa các file PDF tạm
+    for temp_file in processed_pdf_files:
+        if temp_file.startswith("processed_"):
+            os.remove(temp_file)
+
+    # Mở file PDF đã merge
+    os.startfile(output_file)
               
 def select_pdf_files(root):
     """Select PDF files to merge"""
@@ -187,7 +284,7 @@ def reset_frames(root):
 if __name__ == '__main__':
     root = tk.Tk()
     root.title("PDF Merger")
-    root.iconbitmap("CSO_logo_icon.ico")
+    root.iconbitmap("CSO_icon.ico")
     root.padding = 10
     root.geometry("1200x500")
 
@@ -232,5 +329,12 @@ if __name__ == '__main__':
     
     reset_button = tk.Button(content_frame2, text="Reset", fg="white", bg="red", width=5, height=1, font=("Arial", 14, "bold"), padx=10, pady=5, command=lambda: reset_frames(root))
     reset_button.pack(pady=10, anchor='c')
+    # Tạo một nhãn để hiển thị icon
+    icon_image = Image.open("CSO_icon.ico")  # Tải hình ảnh
+    icon_photo = ImageTk.PhotoImage(icon_image)  # Chuyển đổi hình ảnh thành PhotoImage
+
+    icon_label = tk.Label(content_frame2, image=icon_photo)  # Tạo nhãn với hình ảnh
+    icon_label.image = icon_photo  # Giữ tham chiếu đến hình ảnh
+    icon_label.pack(pady=10, anchor='c')  # Đặt nhãn dưới nút reset_button
 
     root.mainloop()
