@@ -1,10 +1,12 @@
-from concurrent.futures import ThreadPoolExecutor
 import tkinter as tk
 from tkinter import filedialog,messagebox
 import PyPDF2
 import os
 from PIL import Image, ImageTk
-from io import BytesIO
+
+import io
+import cv2
+import numpy as np
 from pdf2image import convert_from_path
 from tkinter import filedialog, messagebox
 #processing
@@ -16,15 +18,15 @@ import time  # Thư viện để mô phỏng thời gian xử lý
 
 def get_page_ranges(file_listbox, pdf_files, root):
     """Get page ranges for each PDF file"""
-    rb_frame = tk.Frame(root)
-    rb_frame.pack(pady=10, anchor='w', fill='both', expand=True)
+    frame = tk.Frame(root)
+    frame.pack(pady=10, anchor='w', fill='both', expand=True)
 
     # Create a canvas to hold the content
-    canvas = tk.Canvas(rb_frame, width=400, height=300)
+    canvas = tk.Canvas(frame, width=400, height=300)
     canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
     # Create a scrollbar and associate it with the canvas
-    scrollbar = tk.Scrollbar(rb_frame, orient=tk.VERTICAL, command=canvas.yview)
+    scrollbar = tk.Scrollbar(frame, orient=tk.VERTICAL, command=canvas.yview)
     scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
     canvas.configure(yscrollcommand=scrollbar.set)
 
@@ -67,7 +69,7 @@ def get_page_ranges(file_listbox, pdf_files, root):
     content_frame.update_idletasks()
     canvas.configure(scrollregion=canvas.bbox("all"))
 
-def process_pdfs(pdf_files, target_dpi, page_ranges):
+def process_pdfs(entry_fields, pdf_files, target_dpi, page_ranges):
     """Hàm xử lý PDF trong một luồng riêng"""
     
     # Tạo frame cho thông báo loading
@@ -83,7 +85,6 @@ def process_pdfs(pdf_files, target_dpi, page_ranges):
 
     # Giả lập thời gian xử lý (thay thế bằng mã xử lý PDF thực tế)
     # Thay thế bằng hàm xử lý PDF của bạn
-    time.sleep(3)
 
     # Gọi hàm merge_pdfs hoặc hàm xử lý PDF của bạn
     merge_pdfs(pdf_files, page_ranges, target_dpi)
@@ -115,54 +116,108 @@ def submit_page_ranges(entry_fields, pdf_files, dpi_entry):
         page_ranges.append((start_page, end_page))
 
     # Tạo một luồng mới để xử lý PDF
-    processing_thread = threading.Thread(target=process_pdfs, args=(pdf_files, target_dpi, page_ranges))
+    processing_thread = threading.Thread(target=process_pdfs, args=(entry_fields, pdf_files, target_dpi, page_ranges))
     processing_thread.start()
 
 
+
 def preprocess_scanned_pdf(input_pdf_path, output_pdf_path, target_dpi):
-    """Xử lý tối ưu PDF scan trước khi merge bằng cách giảm DPI"""
+    """
+    Xử lý tối ưu PDF scan trước khi merge
+    Các bước xử lý:
+    1. Chuyển đổi PDF sang ảnh
+    2. Xử lý nâng cao chất lượng ảnh
+    3. Nén và giảm độ phân giải
+    4. Tạo PDF mới
+    """
     try:
-        # Convert PDF to images with specified DPI
-        images = convert_from_path(input_pdf_path, dpi=target_dpi)
-
-        # Use a ThreadPoolExecutor for concurrent processing of images
-        with ThreadPoolExecutor() as executor:
-            image_list = list(executor.map(process_image, images))
-
-        # Save all images to a single PDF
-        if image_list:
-            first_image = image_list[0]
-            other_images = image_list[1:]
-            first_image.save(output_pdf_path, "PDF", resolution=target_dpi, save_all=True, append_images=other_images)
-
+        # Chuyển đổi PDF sang ảnh
+        images = convert_from_path(
+            input_pdf_path, 
+            dpi=target_dpi,
+            grayscale=False
+        )
+        
+        processed_images = []
+        
+        for img in images:
+            # Chuyển ảnh PIL sang numpy
+            np_image = np.array(img)
+            
+            # Các kỹ thuật xử lý ảnh scan
+            # 1. Khử nhiễu Grayscale
+            #denoised = cv2.fastNlMeansDenoising(np_image, None, 10, 7, 21)
+            # 1. Khử nhiễu Color
+            denoised = cv2.fastNlMeansDenoisingColored(np_image, None, 10, 7, 21)
+            
+            # 2. Điều chỉnh độ tương phản - Grayscale
+            #clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            #contrast_enhanced = clahe.apply(denoised)
+            
+            # 2. Điều chỉnh độ tương phản - color 
+            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+            contrast_enhanced = clahe.apply(cv2.cvtColor(denoised, cv2.COLOR_BGR2GRAY))  # Chuyển đổi sang grayscale để điều chỉnh độ tương phản
+            
+            
+            # 3. Chỉnh sáng
+            brightness_adjusted = cv2.convertScaleAbs(contrast_enhanced, alpha=1.2, beta=10)
+            
+            # 4. Làm sắc nét
+            kernel = np.array([[-1,-1,-1], [-1,9,-1], [-1,-1,-1]])
+            sharpened = cv2.filter2D(brightness_adjusted, -1, kernel)
+            
+            # Chuyển lại sang ảnh PIL
+            pil_image = Image.fromarray(sharpened)
+            
+            # Nén ảnh
+            buffered = io.BytesIO()
+            pil_image.save(
+                buffered, 
+                format='JPEG', 
+                optimize=True, 
+                quality=60  # Điều chỉnh chất lượng nén
+            )
+            
+            processed_images.append(Image.open(buffered))
+        
+        # Lưu PDF
+        first_image = processed_images[0]
+        other_images = processed_images[1:]
+        
+        first_image.save(
+            output_pdf_path, 
+            "PDF", 
+            resolution=target_dpi, 
+            save_all=True, 
+            append_images=other_images
+        )
+        
         return True
-
+    
     except Exception as e:
-        print(f"Không thể xử lý PDF scan: {str(e)}")
+        messagebox.showerror("Lỗi", f"Không thể xử lý PDF scan: {str(e)}")
         return False
-
-def process_image(image):
-    """Process a single image (e.g., convert to desired format)"""
-    img_byte_arr = BytesIO()
-    image.save(img_byte_arr, format='JPEG')  # Save as JPEG in memory
-    img_byte_arr.seek(0)  # Move to the beginning of the BytesIO object
-    return Image.open(img_byte_arr)
 
 def merge_pdfs(pdf_files, page_ranges, target_dpi):
     """Merge PDFs and optimize scanned PDFs"""
+    # Danh sách PDF đã xử lý
     processed_pdf_files = []
     
+    # Xử lý từng file PDF scan trước khi merge
     for pdf_file in pdf_files:
+        # Tạo file tạm để lưu PDF đã xử lý
         processed_pdf_path = f"processed_{os.path.basename(pdf_file)}"
         
+        # Xử lý PDF scan
         if preprocess_scanned_pdf(pdf_file, processed_pdf_path, target_dpi):
             processed_pdf_files.append(processed_pdf_path)
         else:
+            # Nếu xử lý lỗi, sử dụng file gốc
             processed_pdf_files.append(pdf_file)
-
+    
+    # Thực hiện merge như bình thường
     output_file = filedialog.asksaveasfilename(defaultextension='.pdf')
     if not output_file:
-        messagebox.showinfo("Info", "No output file selected. Operation cancelled.")
         return
 
     pdf_writer = PyPDF2.PdfWriter()
@@ -170,26 +225,26 @@ def merge_pdfs(pdf_files, page_ranges, target_dpi):
     for pdf_file, (start_page, end_page) in zip(processed_pdf_files, page_ranges):
         try:
             pdf_reader = PyPDF2.PdfReader(pdf_file)
-            total_pages = len(pdf_reader.pages)
-            if start_page < 1 or end_page > total_pages:
-                messagebox.showerror("Error", f"Page range {start_page}-{end_page} is out of bounds for {pdf_file}.")
-                return
-            
             for page in range(start_page - 1, end_page):
-                pdf_writer.add_page(pdf_reader.pages[page])
-
+                if page < len(pdf_reader.pages):  # Check if the page exists
+                    pdf_writer.add_page(pdf_reader.pages[page])
+                else:
+                    messagebox.showerror("Error", f"Page {page + 1} does not exist in {pdf_file}")
+                    return
         except PyPDF2.PdfReader.PdfReadError as e:
             messagebox.showerror("Error", f"Error reading PDF file: {e}")
             return
 
-    try:
-        with open(output_file, 'wb') as pdf_output:
-            pdf_writer.write(pdf_output)
-    finally:
-        for temp_file in processed_pdf_files:
-            if temp_file.startswith("processed_"):
-                os.remove(temp_file)
+    # Lưu file merge
+    with open(output_file, 'wb') as pdf_output:
+        pdf_writer.write(pdf_output)
 
+    # Xóa các file PDF tạm
+    for temp_file in processed_pdf_files:
+        if temp_file.startswith("processed_"):
+            os.remove(temp_file)
+
+    # Mở file PDF đã merge
     os.startfile(output_file)
               
 def select_pdf_files(root):
@@ -202,19 +257,19 @@ def select_pdf_files(root):
     original_order = list(pdf_files)
     
     # Create a frame to hold the sort button and file list
-    rt_frame = tk.Frame(root)
-    rt_frame.pack(pady=10, anchor='w', fill='both', expand=True)
+    frame = tk.Frame(root)
+    frame.pack(pady=10, anchor='w', fill='both', expand=True)
 
     # Create a button to sort the files
-    sort_button = tk.Button(rt_frame, text="Sort Files A-Z", command=lambda: sort_files(original_order, rt_frame))
+    sort_button = tk.Button(frame, text="Sort Files A-Z", command=lambda: sort_files(original_order, frame))
     sort_button.pack(anchor='w', fill='x')
 
     # Create a label to display the file list
-    file_list_label = tk.Label(rt_frame, text="Selected Files:", highlightcolor='blue')
+    file_list_label = tk.Label(frame, text="Selected Files:")
     file_list_label.pack(anchor='w', fill='x')
 
     # Create a frame to hold the file list and scrollbar
-    file_list_frame = tk.Frame(rt_frame)
+    file_list_frame = tk.Frame(frame)
     file_list_frame.pack(anchor='w', fill='both', expand=True)
 
     # Create a scrollbar for the file list
@@ -229,7 +284,7 @@ def select_pdf_files(root):
         file_listbox.insert(tk.END, file)
 
     # Create a frame to hold the move up and move down buttons
-    button_frame = tk.Frame(rt_frame)
+    button_frame = tk.Frame(frame)
     button_frame.pack(anchor='w', fill='x')
 
     # Create a button to move the selected file up
@@ -241,7 +296,7 @@ def select_pdf_files(root):
     move_down_button.pack(side=tk.LEFT)
 
     # Create a button to proceed to page range selection
-    proceed_button = tk.Button(rt_frame, text="Proceed to Page Range Selection", 
+    proceed_button = tk.Button(frame, text="Proceed to Page Range Selection", 
                                 command=lambda: get_page_ranges(file_listbox, pdf_files, root))
     proceed_button.pack(anchor='c')
 
@@ -285,7 +340,7 @@ if __name__ == '__main__':
     root.title("PDF Merger")
     root.iconbitmap("pdf_filetypes_21618.ico")
     root.padding = 10
-    root.geometry("1200x600")
+    root.geometry("1200x500")
 
     # Create a canvas to hold the content
     canvas = tk.Canvas(root)
@@ -311,7 +366,8 @@ if __name__ == '__main__':
     instructions_label.pack(pady=10, anchor='c', fill='x')
 
     # Create a button to start the merge process
-    button = tk.Button(content_frame2, text="Select PDF Files", command=lambda: select_pdf_files(root))
+    button = tk.Button(content_frame2, text="Select PDF Files", 
+                        command=lambda: select_pdf_files(root))
     button.pack(pady=10, anchor='c')
 
     # Update the scroll region
@@ -334,12 +390,5 @@ if __name__ == '__main__':
     icon_label = tk.Label(content_frame2, image=icon_photo)  # Tạo nhãn với hình ảnh
     icon_label.image = icon_photo  # Giữ tham chiếu đến hình ảnh
     icon_label.pack(pady=10, anchor='c')  # Đặt nhãn dưới nút reset_button
-    
-    copyright_frame = tk.Frame(content_frame2)
-    copyright_frame.pack(side=tk.BOTTOM, pady=10, anchor='c')
-
-    # Create a label for the copyright notice
-    copyright_label = tk.Label(copyright_frame, text="© 2024 by Đoàn Lương Bửu", fg="gray", font=("Arial", 10))
-    copyright_label.pack()
 
     root.mainloop()
