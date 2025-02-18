@@ -41,7 +41,7 @@ def get_page_ranges(file_listbox, pdf_files, root):
     dpi_label = tk.Label(content_frame, text="Nhập target DPI:", fg="blue")
     dpi_label.pack(anchor='w', fill='x')
     dpi_entry = tk.Entry(content_frame)
-    dpi_entry.insert(0, "150")  # Giá trị mặc định
+    dpi_entry.insert(0, "300")  # Giá trị mặc định
     dpi_entry.pack(anchor='w', fill='x')
 
     for pdf_file in pdf_files:
