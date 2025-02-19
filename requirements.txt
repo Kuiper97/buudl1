@@ -8,3 +8,11 @@ os
 
 #for merge file pdf 
 PyPDF2
+pdf2image
+
+# Poppler is required for pdf2image to work
+# Windows: Install poppler using winget: winget install poppler
+# Linux: Install using package manager (e.g., sudo apt-get install poppler-utils)
+# macOS: Install using brew: brew install poppler
+
+pdf2image
